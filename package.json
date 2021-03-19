@@ -1,0 +1,30 @@
+{
+  "name": "email",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "babel-node ./index.js",
+    "sender": "babel-node ./sender.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/cli": "^7.10.3",
+    "@babel/core": "^7.10.3",
+    "@babel/node": "^7.10.3",
+    "@babel/preset-env": "^7.10.3",
+    "@klenty/imap": "^1.1.4",
+    "base64-stream": "^1.0.0",
+    "fastify-session": "^4.0.1",
+    "imap": "^0.8.19",
+    "lodash": "^4.17.15",
+    "nodemailer": "^6.5.0"
+  },
+  "repository": {
+    "type": "git"
+  },
+  "bugs": {},
+  "homepage": "",
+  "description": ""
+}
