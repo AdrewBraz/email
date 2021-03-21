@@ -12,7 +12,12 @@ const imap = new Imap({
     host: 'imap.yandex.ru',
     port: 993,
     tls: true,
+    keepalive: true
 });
+
+const state = {
+  messages: []
+}
 
 const main = async (obj) => {
     const {email, subject} = obj;
@@ -45,25 +50,37 @@ const main = async (obj) => {
   })
 }
 
+const addAttrs = (attrs) => {
+  const { subject, sender } = attrs.envelope;
+  const { uid } = attrs;
+  const { messages } = state;
+  const email = `${sender[0].mailbox}@${sender[0].host}`;
+  messages.push({uid, email, subject})
+}
+
+imap.on('update', (seqno, info) => {
+  const { flags, uid } = info;
+  console.log(uid)
+  if(flags.includes('\\Seen')){
+    console.log(info)
+    const message = state.messages.find(item => item.uid === uid)
+     main(message).catch(console.error)
+  } return
+})
+
+
 imap.once('ready', () => {
-    const arr = [];
+    const {seqnos, messages} = state;
     imap.openBox('INBOX', false, (err, box) => {
       if (err) throw err;
-      imap.search([ 'UNSEEN', ['SINCE', 'March 19, 2021'] ], function(err, results) {
+      imap.search([ 'UNSEEN', ['SINCE', 'March 15, 2021'] ], function(err, results) {
         if (err) throw err;
-        console.log(results)
-        var f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
+        const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
         f.on('message', function(msg, seqno) {
           console.log('Message #%d', seqno);
-          var prefix = '(#' + seqno + ') ';
-          msg.on('body', function(stream, info) {
-            stream.pipe(fs.createWriteStream('msg-' + seqno + '-body.txt'));
-          });
+          let prefix = '(#' + seqno + ') ';
           msg.once('attributes', (attrs) => {
-            const { subject, sender } = attrs.envelope;
-            console.log(sender[0])
-            const email = `${sender[0].mailbox}@${sender[0].host}`;
-            arr.push({subject, email});
+            addAttrs(attrs)
           });
           msg.once('end', function() {
             console.log(prefix + 'Finished');
@@ -80,34 +97,24 @@ imap.once('ready', () => {
         //   imap.end();
         // });
       });
-      imap.on('mail', (err, box) => {
-        imap.search(['UNSEEN', ['SINCE', 'March 01, 2021']], (err, results) => {
-            if(err) throw err;
-            console.log(results)
-            var f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
-            f.on('message', function(msg, seqno) {
+      imap.on('mail',  (numNewMsgs) => {
+        imap.search(['NEW'], (err, results) => {
+          if(err) throw err;
+          const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
+          f.on('message', function(msg, seqno) {
             console.log('Message #%d', seqno);
-            var prefix = '(#' + seqno + ') ';
-            msg.on('body', function(stream, info) {
-                stream.pipe(fs.createWriteStream('msg-' + seqno + '-body.txt'));
-            });
+            let prefix = '(#' + seqno + ') ';
             msg.once('attributes', (attrs) => {
-                const { subject, sender } = attrs.envelope;
-                console.log(sender[0])
-                const email = `${sender[0].mailbox}@${sender[0].host}`;
-                arr.push({subject, email});
+              addAttrs(attrs)
             });
             msg.once('end', function() {
-                console.log(prefix + 'Finished');
+              console.log(prefix + 'Finished');
             });
-            });
-            f.once('error', function(err) {
+          });
+          f.once('error', function(err) {
             console.log('Fetch error: ' + err);
-            });
+          });
         })
-    })
-    imap.on('update', (seqno, info) => {
-        console.log(seqno, info)
     })
     });
 })
