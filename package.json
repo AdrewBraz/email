@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "babel-node ./index.js",
-    "sender": "babel-node ./sender.js"
+    "sender": "babel-node ./sender.js",
+    "png": "babel-node ./tiffTopng.js"
   },
   "author": "",
   "license": "ISC",
@@ -17,9 +18,11 @@
     "@klenty/imap": "^1.1.4",
     "base64-stream": "^1.0.0",
     "fastify-session": "^4.0.1",
+    "gm": "^1.23.1",
     "imap": "^0.8.19",
     "lodash": "^4.17.15",
-    "nodemailer": "^6.5.0"
+    "nodemailer": "^6.5.0",
+    "tiff-to-png": "^2.0.2"
   },
   "repository": {
     "type": "git"
