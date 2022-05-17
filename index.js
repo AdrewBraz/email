@@ -52,7 +52,7 @@ function findAttachmentParts(struct, attachments) {
 }
 
  function buildAttMessageFunction(attachment, header) {
-  var filename = attachment.params.name.length > 25 ? attachment.params.name.slice(-25, -2) : attachment.params.name
+  var filename = attachment.params.name.length > 25 ? attachment.params.name.slice(-24) : attachment.params.name
   var encoding = attachment.encoding;
   const dirName = (header).replace('Fwd: ', '').replace(/\./g, '')
   const pathName = `\\\\172.16.11.205\\mc_scans\\СМП\\${dirName}`
@@ -95,7 +95,7 @@ imap.once('ready', function() {
   imap.openBox('INBOX', false, function(err, box) {
     console.log(box)
     if (err) throw err;
-    imap.search(['UNSEEN', ['SINCE', 'January 20, 2021']], (err, result) => {
+    imap.search(['UNSEEN', ['SINCE', 'March 20, 2021']], (err, result) => {
         if(err) throw err;
         console.log(result)
         var f =  imap.fetch(result, {
