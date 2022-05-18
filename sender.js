@@ -3,6 +3,7 @@ import fs from 'fs'
 import  path from 'path'
 import { result } from 'lodash';
 import nodemailer from 'nodemailer';
+// import connect from './connect'
 
 import excludedMails from './excludedMails';
 
@@ -45,21 +46,25 @@ const html = fs.readFileSync(`${__dirname}/index.html`, 'utf8')
 // }
 
 const addAttrs = (attrs) => {
+  console.log('smthv1')
   const { subject, sender } = attrs.envelope;
   const { uid } = attrs;
   const { messages } = state;
   const email = `${sender[0].mailbox}@${sender[0].host}`;
   if(!excludedMails.includes(email)){
+    console.log('smthv')
     messages.push({uid, email, subject})
+    console.log(messages)
   }
   return null
 }
 
 const connectFunc = () => {
     const {seqnos, messages} = state;
-    imap.openBox('INBOX', false, (err, box) => {
+    console.log('open box')
+    imap.openBox('INBOX', false, async (err, box) => {
       if (err) throw err;
-      imap.search([ 'UNSEEN', ['SINCE', 'Apr 01, 2021'] ], function(err, results) {
+      await imap.search([ 'UNSEEN', ['SINCE', 'Apr 01, 2021'] ], function(err, results) {
         if (err) throw err;
         const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
         f.on('message', function(msg, seqno) {
@@ -81,9 +86,10 @@ const connectFunc = () => {
           if(err) throw err;
           const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
           f.on('message', function(msg, seqno) {
-            console.log('Message #%d', seqno);
+            console.log(`Message ${seqno}`);
             let prefix = '(#' + seqno + ') ';
             msg.once('attributes', (attrs) => {
+              console.log('message')
               addAttrs(attrs)
             });
             msg.once('end', function() {
@@ -94,17 +100,27 @@ const connectFunc = () => {
             console.log('Fetch error: ' + err);
           });
         })
-    })
+      })
     });
 }
+
+imap.on('ready', connectFunc)
+
+// imap.on('mail', (numNewMsgs) => {
+//   console.log(numNewMsgs)
+//   // imap.search(['NEW'], (err, results) => {
+//   //   if(err) throw err
+//   //   const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true })
+//   // })
+// })
 
 imap.on('update', (seqno, info) => {
   const { flags, uid } = info;
   if(flags.includes('\\Seen')){
-    console.log(state)
     const message = state.messages.find(item => item.uid === uid)
     if(message){
       const { email, subject } = message
+      console.log(message)
       transporter.sendMail({
               from: 'andyWitman@yandex.ru',
               to: email,
@@ -114,17 +130,18 @@ imap.on('update', (seqno, info) => {
             if(err){
               console.log(err + "FUUUUUCKL")
             }
-          console.log(info)
           })
     }
   } return
 })
 
-imap.once('error', function(err) {
-  console.log(err + '  watta fuck');
+imap.on('error', function(err) {
+  console.log('TCT ERR' + err.code);
+  imap.destroy()
+  console.log('connection destroyed')
+  imap.connect()
 });
 
-  imap.once('ready', connectFunc)
-  imap.connect()
+imap.connect()
 
   
