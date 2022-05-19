@@ -1,9 +1,11 @@
-import Imap from 'imap';
-import fs from 'fs'
-import  path from 'path'
-import { result } from 'lodash';
+import { CronJob } from 'cron';
+import connect from './connect';
+import Imap  from 'imap'
+import { castArray } from "lodash";
 import nodemailer from 'nodemailer';
-// import connect from './connect'
+import fs from 'fs'
+
+
 
 import excludedMails from './excludedMails';
 
@@ -20,20 +22,6 @@ const imap = new Imap({
     }
 });
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.yandex.ru',
-  port: 587,
-  secure: false,
-  auth: {
-    user: 'andyWitman@yandex.ru',
-    pass: 'Rem32123'
-  }
-})
-
-const state = {
-  messages: []
-}
-
 
 const html = fs.readFileSync(`${__dirname}/index.html`, 'utf8')
 
@@ -44,6 +32,10 @@ const html = fs.readFileSync(`${__dirname}/index.html`, 'utf8')
 //       html
 //   })
 // }
+
+const state = {
+  messages: []
+}
 
 const addAttrs = (attrs) => {
   console.log('smthv1')
@@ -59,12 +51,12 @@ const addAttrs = (attrs) => {
   return null
 }
 
-const connectFunc = () => {
+const connectFunc = async () => {
     const {seqnos, messages} = state;
     console.log('open box')
-    imap.openBox('INBOX', false, async (err, box) => {
+    imap.openBox('INBOX', false, (err, box) => {
       if (err) throw err;
-      await imap.search([ 'UNSEEN', ['SINCE', 'Apr 01, 2021'] ], function(err, results) {
+      imap.search([ 'UNSEEN', ['SINCE', 'Apr 01, 2021'] ], function(err, results) {
         if (err) throw err;
         const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
         f.on('message', function(msg, seqno) {
@@ -80,68 +72,37 @@ const connectFunc = () => {
         f.once('error', function(err) {
           console.log('Fetch error: ' + err);
         });
-      });
-      imap.on('mail',  (numNewMsgs) => {
-        imap.search(['NEW'], (err, results) => {
-          if(err) throw err;
-          const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
-          f.on('message', function(msg, seqno) {
-            console.log(`Message ${seqno}`);
-            let prefix = '(#' + seqno + ') ';
-            msg.once('attributes', (attrs) => {
-              console.log('message')
-              addAttrs(attrs)
-            });
-            msg.once('end', function() {
-              console.log(prefix + 'Finished');
-            });
-          });
-          f.once('error', function(err) {
-            console.log('Fetch error: ' + err);
-          });
+        f.on('end', () => {
+          console.log('event')
+          imap.end()
+          imap.destroy()
+          console.log('connection closed')
         })
-      })
+      });
     });
 }
 
-imap.on('ready', connectFunc)
-
-// imap.on('mail', (numNewMsgs) => {
-//   console.log(numNewMsgs)
-//   // imap.search(['NEW'], (err, results) => {
-//   //   if(err) throw err
-//   //   const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true })
-//   // })
-// })
-
-imap.on('update', (seqno, info) => {
-  const { flags, uid } = info;
-  if(flags.includes('\\Seen')){
-    const message = state.messages.find(item => item.uid === uid)
-    if(message){
-      const { email, subject } = message
-      console.log(message)
-      transporter.sendMail({
-              from: 'andyWitman@yandex.ru',
-              to: email,
-              subject: subject,
-              html
-          }, (err, info) => {
-            if(err){
-              console.log(err + "FUUUUUCKL")
-            }
-          })
-    }
-  } return
-})
-
-imap.on('error', function(err) {
-  console.log('TCT ERR' + err.code);
-  imap.destroy()
-  console.log('connection destroyed')
+const main = () => {
+  console.log('start')
+  imap.once('ready', connectFunc)
   imap.connect()
-});
+}
 
-imap.connect()
+// console.log('start')
+//   imap.once('ready', connectFunc)
+//   imap.once('error', function(err) {
+//     console.log(err + '  watta fuck');
+//   });
+//   imap.connect()
 
-  
+const job = new CronJob(
+  '0 */1 * * * *',
+  () => {
+    console.log('message')
+    main()
+  },
+  null,
+  true
+)
+
+job.start()

@@ -1,28 +1,42 @@
-export default (imap) => {
-    const intervalConnect = false;
-    const launchIntervalConnect =() => {
-        imap.destroy();
-        console.log("connection closed")
-        imap.connect()
-        console.log("connection reopened")
-    }
-    
-    const clearIntervalConnect =() => {
-        if(false == intervalConnect) return
-        clearInterval(intervalConnect)
-        intervalConnect = false
-    }
-    imap.on('error', (err) => {
-      console.log(err.code, 'TCP ERROR')
-      launchIntervalConnect()
-    })
-    imap.on('close', launchIntervalConnect)
-    imap.on('end', launchIntervalConnect)
+import { ImapFlow } from "imapflow";
+import { castArray } from "lodash";
+import nodemailer from 'nodemailer';
 
-    const reconnect = () => {
-        clearIntervalConnect()
-        imap.connect()
-    }
 
-    reconnect()
+
+const client = new ImapFlow({
+    host: 'imap.yandex.ru',
+    port: 993,
+    auth: {
+        user: 'andyWitman@yandex.ru',
+        pass: 'Rem32123'
+    },
+    tls: {
+        minVersion: "TLSv1"
+    },
+});
+
+const imap = async () => {
+    await client.connect();
+    console.log('App connected to imap server')
+
+    // const lock = await client.getMailboxLock('INBOX');
+
+    // try{
+    //     let messages = await client.fetch({seen: false}, {
+    //         flage: true,
+    //         envelope: true,
+    //         source: false,
+    //         bodyParts: true,
+    //         bodyStructure: true,
+    //         uid: true, 
+    //       })
+    //     console.log(messages)
+    // } finally {
+    //     lock.release();
+    // }
+
+    await client.logout();
 }
+
+export default imap
