@@ -1,9 +1,9 @@
 import { CronJob } from 'cron';
-import connect from './connect';
-import Imap  from 'imap'
-import { castArray } from "lodash";
+import Imap from 'imap'
+import { castArray, result } from "lodash";
 import nodemailer from 'nodemailer';
 import fs from 'fs'
+import { promisify } from 'util';
 
 
 
@@ -32,20 +32,44 @@ const html = fs.readFileSync(`${__dirname}/index.html`, 'utf8')
 //       html
 //   })
 // }
+const openBox = promisify(imap.openBox.bind(imap))
+const fetch = promisify(imap.fetch.bind(imap))
+const search = promisify(imap.search.bind(imap))
+const answerFunc = async (results) => {
+  console.log('smth')
+  const f = await fetch(results, { bodies: 'HEADER', struct: true, envelope: true })
+  f.on('message', function(msg, seqno) {
+    console.log('Message #%d', seqno);
+    let prefix = '(#' + seqno + ') ';
+    msg.once('attributes', (attrs) => {
+      addAttrs(attrs)
+    });
+    msg.once('end', function() {
+      console.log(prefix + 'Finished');
+    });
+  });
+  f.once('error', function(err) {
+    console.log('Fetch error: ' + err);
+  });
+  f.on('end', () => {
+    console.log('event')
+    imap.end()
+    imap.destroy()
+    console.log('connection closed')
+  })
+}
 
 const state = {
   messages: []
 }
 
 const addAttrs = (attrs) => {
-  console.log('smthv1')
   const { subject, sender } = attrs.envelope;
-  const { uid } = attrs;
+  const { uid, flags } = attrs;
   const { messages } = state;
   const email = `${sender[0].mailbox}@${sender[0].host}`;
   if(!excludedMails.includes(email)){
-    console.log('smthv')
-    messages.push({uid, email, subject})
+    messages.push({uid, email, subject, flags})
     console.log(messages)
   }
   return null
@@ -54,32 +78,33 @@ const addAttrs = (attrs) => {
 const connectFunc = async () => {
     const {seqnos, messages} = state;
     console.log('open box')
-    imap.openBox('INBOX', false, (err, box) => {
-      if (err) throw err;
-      imap.search([ 'UNSEEN', ['SINCE', 'Apr 01, 2021'] ], function(err, results) {
-        if (err) throw err;
-        const f = imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true });
-        f.on('message', function(msg, seqno) {
-          console.log('Message #%d', seqno);
-          let prefix = '(#' + seqno + ') ';
-          msg.once('attributes', (attrs) => {
-            addAttrs(attrs)
+    await openBox('INBOX', false)
+      .then(box => console.log(box))
+      .catch(err => console.log(err))
+    await search([ 'UNSEEN', ['SINCE', 'Apr 01, 2021'] ])
+      .then((results) => {
+        if(results.length > 0){
+          const f =  imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true })
+          f.on('message', function(msg, seqno) {
+            console.log('Message #%d', seqno);
+            let prefix = '(#' + seqno + ') ';
+            msg.once('attributes', (attrs) => {
+              addAttrs(attrs)
+            });
+            msg.once('end', function() {
+              console.log(prefix + 'Finished');
+            });
           });
-          msg.once('end', function() {
-            console.log(prefix + 'Finished');
-          });
-        });
-        f.once('error', function(err) {
-          console.log('Fetch error: ' + err);
-        });
-        f.on('end', () => {
-          console.log('event')
-          imap.end()
-          imap.destroy()
-          console.log('connection closed')
-        })
-      });
-    });
+          f.once('error', function(err) {
+            console.log('Fetch error: ' + err);
+          })
+          f.on('end', () => {
+            console.log('stream closed')
+          })
+        }
+      })
+      .catch(err => console.log(err))
+
 }
 
 const main = () => {
