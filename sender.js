@@ -1,13 +1,9 @@
 import { CronJob } from 'cron';
 import Imap from 'imap'
-import { castArray, result } from "lodash";
 import nodemailer from 'nodemailer';
 import fs from 'fs'
-import { isEqual } from 'lodash';
 import { promisify } from 'util';
-import excludedMails from './excludedMails';
-import { Console } from 'console';
-
+import { addAttrs } from './utils';
 const imap = new Imap({
     user: 'andyWitman@yandex.ru',
     password: 'Rem32123',
@@ -29,22 +25,21 @@ const html = fs.readFileSync(`${__dirname}/index.html`, 'utf8')
 
 const openBox = promisify(imap.openBox.bind(imap))
 const search = promisify(imap.search.bind(imap))
-const fetch = async (results, transporter) => {
+
+const closeConnections = (transporter) => {
+  imap.end()
+  transporter.close()
+  imap.destroy()
+  console.log('connection closed')
+}
+const fetch = async (results) => {
+  const { messages } = state;
   const f =  imap.fetch(results, { bodies: 'HEADER', struct: true, envelope: true })
   f.on('message', function(msg, seqno) {
     console.log('Message #%d', seqno);
     let prefix = '(#' + seqno + ') ';
     msg.once('attributes', async (attrs) => {
-      addAttrs(attrs)
-      console.log(shouldBeAnswered(attrs.uid, attrs.flags))
-      // if(shouldBeAnswered(attrs.uid, attrs.flags)){
-      //   await  transporter.sendMail({
-      //     from: 'andyWitman@yandex.ru',
-      //     to: email,
-      //     subject: subject,
-      //     html
-      //   })
-      // }
+      addAttrs(attrs, messages)
     });
     msg.once('end', function() {
       console.log(prefix + 'Finished');
@@ -54,66 +49,57 @@ const fetch = async (results, transporter) => {
     console.log('Fetch error: ' + err);
   });
   f.on('end', () => {
-    console.log('event')
-    imap.end()
-    transporter.close()
-    imap.destroy()
-    console.log('connection closed')
+    console.log('Fetching ended')
   })
 }
 
-const addAttrs = (attrs) => {
-  const { subject, sender } = attrs.envelope;
-  const { uid, flags } = attrs;
-  const { messages } = state;
-  const email = `${sender[0].mailbox}@${sender[0].host}`;
-  if(!excludedMails.includes(email) && !messages.find(el => uid === el.uid)){
-    messages.push({uid, email, subject, flags})
-    console.log(messages)
-  }
-  return null
+const connectFunc = async (transporter) => {
+    console.log('open box')
+    await openBox('INBOX', false)
+      .then(box => console.log(box))
+      .catch(err => console.log(err))
+    await search([ 'UNSEEN', ['SINCE', 'May 24, 2021'] ])
+      .then((results) => {
+        if(results.length > 0){
+          fetch(results, transporter)
+        }
+      })
+      .catch(err => {
+        throw new Error(err)
+      })
+  imap.on('update', (seqno, info) => {
+    const { flags, uid } = info;
+    console.log(flags, uid)
+  })
+  setTimeout(() => {
+    closeConnections(transporter)
+  }, 110000)
 }
 
-const shouldBeAnswered = (uid, flags) => {
-  const { messages } = state;
-  const mail = messages.find(item => item.uid === uid);
-  const oldFlags = mail.flags
-  console.log( !isEqual(oldFlags, flags))
-  return (!isEqual(oldFlags, flags) && flags.includes('Seen'))
-}
-
-const connectFunc = async () => {
+const main = () => {
   const transporter = nodemailer.createTransport({
     host: 'smtp.yandex.ru',
-    port: 587,
+    port: 465,
     secure: false,
     auth: {
       user: 'andyWitman@yandex.ru',
       pass: 'Rem32123'
     }
   })
-    console.log('open box')
-    await openBox('INBOX', false)
-      .then(box => console.log(box))
-      .catch(err => console.log(err))
-    await search([ 'ALL', ['SINCE', 'Apr 01, 2021'] ])
-      .then((results) => {
-        if(results.length > 0){
-          fetch(results, transporter)
-        }
-      })
-      .catch(err => console.log(err))
-
-}
-
-const main = () => {
+  try{
   console.log('start')
-  imap.once('ready', connectFunc)
+  imap.once('ready', () => {
+    connectFunc(transporter)
+  })
   imap.connect()
+  } catch(err){
+    console.log(err)
+    closeConnections(transporter)
+  }
 }
 
 const job = new CronJob(
-  '0 */1 * * * *',
+  '0 */2 * * * *',
   () => {
     console.log('message')
     main()
