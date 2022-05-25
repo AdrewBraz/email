@@ -65,6 +65,7 @@ const connectFunc = async (transporter) => {
         }
       })
       .catch(err => {
+        console.log('THERE IS AN ERROR')
         throw new Error(err)
       })
   imap.on('update', (seqno, info) => {
@@ -94,8 +95,13 @@ const main = () => {
   imap.connect()
   } catch(err){
     console.log(err)
+    console.log('something went wrong')
     closeConnections(transporter)
   }
+  imap.on('error', () => {
+    console.log('THIS is an ERROR')
+    closeConnections(transporter)
+  })
 }
 
 const job = new CronJob(
